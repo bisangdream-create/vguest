@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마음을 전하는 온라인 방명록</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts (Korean Warm Fonts) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Gowun+Dodum&family=Gamja+Flower&display=swap" rel="stylesheet">
+    <!-- html2pdf.js for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        gowun: ['Gowun Dodum', 'sans-serif'],
+                        hand: ['Gaegu', 'cursive'],
+                        gamja: ['Gamja Flower', 'cursive']
+                    },
+                    colors: {
+                        paperBg: '#FDFBF7',
+                        warmBg: '#FAF4E8',
+                        warmAccent: '#E8D2A6',
+                        postitYellow: '#FEF08A',
+                        postitPink: '#FECDD3',
+                        postitBlue: '#BAE6FD',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Gowun Dodum', sans-serif;
+            background-color: #FAF4E8;
+            background-image: radial-gradient(#E8D8C8 0.75px, transparent 0.75px);
+            background-size: 20px 20px;
+        }
+        .font-handwriting {
+            font-family: 'Gaegu', cursive;
+        }
+        /* Sticky Note Tape Effect */
+        .masking-tape {
+            background-color: rgba(255, 255, 255, 0.75);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+            border-left: 1px dashed rgba(0,0,0,0.12);
+            border-right: 1px dashed rgba(0,0,0,0.12);
+        }
+        /* Sticky note slight rotation logic */
+        .note-rotate-1 { transform: rotate(-1.2deg); }
+        .note-rotate-2 { transform: rotate(1.1deg); }
+        .note-rotate-3 { transform: rotate(-0.7deg); }
+        .note-rotate-4 { transform: rotate(1.4deg); }
+
+        .note-card {
+            transition: all 0.2s ease-in-out;
+        }
+        .note-card:hover {
+            transform: scale(1.05) rotate(0deg) !important;
+            z-index: 20;
+            box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.12), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        /* Grid Board background texture */
+        .board-grid-pattern {
+            background-image: linear-gradient(to right, rgba(232, 210, 166, 0.15) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(232, 210, 166, 0.15) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        /* PDF Export optimization styling */
+        .pdf-export-mode {
+            background: #FAF4E8 !important;
+            padding: 15px !important;
+            max-width: 100% !important;
+        }
+        .pdf-export-mode .no-pdf {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-amber-950 flex flex-col">
+
+    <!-- Top Header / Controls -->
+    <header class="sticky top-0 z-30 bg-[#FAF4E8]/90 backdrop-blur-md border-b border-amber-200/60 px-4 py-2.5 shadow-xs">
+        <div class="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+                <span class="text-xl text-amber-600"><i class="fa-solid fa-book-bookmark"></i></span>
+                <h1 id="header-brand" class="font-bold text-base text-amber-900 tracking-wide">우리들의 추억 방명록</h1>
+            </div>
+
+            <div class="flex items-center flex-wrap gap-2">
+                <button onclick="openModal('add-modal')" class="bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-medium px-3 py-1.5 rounded-xl text-xs sm:text-sm transition shadow-xs flex items-center gap-1.5">
+                    <i class="fa-solid fa-pen-to-square"></i> 방명록 남기기
+                </button>
+                <button onclick="downloadPDF()" class="bg-amber-100 hover:bg-amber-200 text-amber-900 font-medium px-3 py-1.5 rounded-xl text-xs sm:text-sm transition flex items-center gap-1.5 border border-amber-300/50">
+                    <i class="fa-solid fa-file-pdf text-red-500"></i> PDF 저장
+                </button>
+                <button onclick="copyShareLink()" class="bg-amber-100 hover:bg-amber-200 text-amber-900 font-medium px-3 py-1.5 rounded-xl text-xs sm:text-sm transition flex items-center gap-1.5 border border-amber-300/50">
+                    <i class="fa-solid fa-share-nodes text-amber-700"></i> 주소 복사
+                </button>
+                <button onclick="openAdminAuthModal()" class="bg-stone-200/80 hover:bg-stone-300 text-stone-700 font-medium px-2.5 py-1.5 rounded-xl text-xs sm:text-sm transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-gear"></i> 관리자
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Board Canvas -->
+    <main class="flex-grow max-w-[1600px] w-full mx-auto p-3 sm:p-6">
+
+        <!-- Guestbook Board Container -->
+        <div id="capture-area" class="bg-white/50 backdrop-blur-xs border border-amber-200/90 rounded-3xl p-4 sm:p-8 shadow-sm relative overflow-hidden board-grid-pattern min-h-[85vh]">
+            <div class="absolute -top-5 left-1/2 -translate-x-1/2 w-36 h-8 masking-tape rotate-1"></div>
+
+            <!-- Title Area -->
+            <div class="text-center max-w-3xl mx-auto mb-6">
+                <div class="inline-block bg-amber-100/90 text-amber-800 text-[11px] px-3 py-0.5 rounded-full font-medium mb-2 border border-amber-200">
+                    <i class="fa-solid fa-heart text-rose-400 mr-1"></i> 방  명   록
+                </div>
+
+                <!-- Main Guestbook Title -->
+                <h2 id="paper-title" class="text-2xl sm:text-4xl font-bold font-handwriting text-amber-950 tracking-wide my-1 leading-snug">
+                    전학 가는 OOO을 위한 소중한 방명록 🌸
+                </h2>
+                <p id="paper-subtitle" class="text-xs sm:text-sm text-amber-800/80 font-gowun">
+                    따뜻한 한마디를 남겨주세요!
+                </p>
+
+                <!-- Sticky Note Count Badge -->
+                <div class="mt-3 inline-flex items-center gap-1.5 bg-white/80 px-3 py-1 rounded-full text-xs font-medium text-amber-900 border border-amber-200/80 shadow-2xs">
+                    <span>작성된 방명록 글</span>
+                    <span id="note-count" class="bg-amber-500 text-white px-2 py-0.2 rounded-full font-bold text-xs">0</span>개
+                </div>
+            </div>
+
+            <!-- Notes Grid Container -->
+            <div id="notes-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4 text-left max-w-6xl mx-auto">
+                <div class="col-span-full py-20 text-center text-amber-800/60">
+                    <i class="fa-solid fa-spinner fa-spin text-2xl mb-2 text-amber-500"></i>
+                    <p class="text-xs">방명록 메시지를 불러오는 중입니다...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="py-4 text-center text-[11px] text-amber-800/60 border-t border-amber-200/40">
+        <p>함께했던 소중한 기억을 간직하며 🌸 | 온라인 추억 방명록</p>
+    </footer>
+
+    <!-- 1. Add / Edit Guestbook Message Modal -->
+    <div id="add-modal" class="fixed inset-0 bg-amber-950/40 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-[#FFFDF9] border border-amber-200 rounded-3xl max-w-md w-full p-5 shadow-2xl relative">
+            <button onclick="closeModal('add-modal')" class="absolute top-4 right-4 text-stone-400 hover:text-stone-600 w-8 h-8 rounded-full flex items-center justify-center transition">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+
+            <h3 id="modal-title" class="text-lg font-bold text-amber-950 mb-3 flex items-center gap-2">
+                <i class="fa-solid fa-book-open text-amber-500"></i> 방명록 남기기
+            </h3>
+
+            <form id="message-form" onsubmit="handleFormSubmit(event)" class="space-y-3.5">
+                <input type="hidden" id="editing-note-id" value="">
+
+                <div>
+                    <label class="block text-xs font-bold text-amber-900 mb-1">작성자 이름 / 닉네임</label>
+                    <input type="text" id="author-input" required maxlength="12" placeholder=""
+                        class="w-full px-3 py-2 bg-amber-50/50 border border-amber-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                </div>
+
+                <!-- Design Selection -->
+                <div>
+                    <label class="block text-xs font-bold text-amber-900 mb-1.5">메모지 디자인 선택</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="note-style" value="yellow" checked class="peer hidden">
+                            <div class="p-2 bg-[#FEF08A] rounded-lg border-2 border-transparent peer-checked:border-amber-600 peer-checked:shadow-xs text-center transition">
+                                <div class="w-3 h-3 rounded-full bg-amber-400 mx-auto mb-0.5"></div>
+                                <span class="text-[11px] font-medium text-amber-950">햇살 노랑</span>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="note-style" value="pink" class="peer hidden">
+                            <div class="p-2 bg-[#FECDD3] rounded-lg border-2 border-transparent peer-checked:border-rose-500 peer-checked:shadow-xs text-center transition">
+                                <div class="w-3 h-3 rounded-full bg-rose-400 mx-auto mb-0.5"></div>
+                                <span class="text-[11px] font-medium text-rose-950">벚꽃 핑크</span>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="note-style" value="blue" class="peer hidden">
+                            <div class="p-2 bg-[#BAE6FD] rounded-lg border-2 border-transparent peer-checked:border-sky-600 peer-checked:shadow-xs text-center transition">
+                                <div class="w-3 h-3 rounded-full bg-sky-400 mx-auto mb-0.5"></div>
+                                <span class="text-[11px] font-medium text-sky-950">민트 하늘</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-amber-900 mb-1">방명록 메시지 (약 5줄 내외)</label>
+                    <textarea id="content-input" required rows="5" maxlength="180" placeholder="전하고 싶은 따뜻한 인사를 세로 메모지에 남겨주세요."
+                        class="w-full px-3 py-2 bg-amber-50/50 border border-amber-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none font-handwriting text-base leading-relaxed text-amber-950"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-amber-900 mb-1">
+                        수정/삭제용 핀번호 <span class="text-stone-400 font-normal">(숫자 4자리)</span>
+                    </label>
+                    <input type="password" id="pin-input" required pattern="[0-9]{4}" maxlength="4" placeholder="****"
+                        class="w-full px-3 py-2 bg-amber-50/50 border border-amber-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 tracking-widest">
+                    <p class="text-[10px] text-amber-800/60 mt-0.5">나중에 작성한 글을 수정하거나 삭제할 때 사용됩니다.</p>
+                </div>
+
+                <div class="pt-1 flex gap-2 justify-end">
+                    <button type="button" onclick="closeModal('add-modal')" class="px-3.5 py-2 text-xs text-stone-600 hover:bg-stone-100 rounded-xl transition font-medium">
+                        취소
+                    </button>
+                    <button type="submit" id="save-btn" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs sm:text-sm rounded-xl font-medium transition shadow-xs">
+                        방명록 남기기
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 2. PIN Verification Modal (Edit / Delete) -->
+    <div id="pin-modal" class="fixed inset-0 bg-amber-950/40 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-[#FFFDF9] border border-amber-200 rounded-3xl max-w-sm w-full p-5 shadow-2xl relative">
+            <button onclick="closeModal('pin-modal')" class="absolute top-4 right-4 text-stone-400 hover:text-stone-600 w-8 h-8 rounded-full flex items-center justify-center transition">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+
+            <h3 class="text-base font-bold text-amber-950 mb-1 flex items-center gap-2">
+                <i class="fa-solid fa-key text-amber-500"></i> 핀번호 확인
+            </h3>
+            <p class="text-[11px] text-amber-800/80 mb-3">방명록 작성 시 설정한 4자리 핀번호를 입력하세요.</p>
+
+            <form onsubmit="verifyPinAndProceed(event)" class="space-y-3">
+                <input type="hidden" id="target-note-id" value="">
+                <input type="hidden" id="target-action" value="">
+
+                <div>
+                    <input type="password" id="verify-pin-input" required pattern="[0-9]{4}" maxlength="4" placeholder="****" autofocus
+                        class="w-full px-3 py-2 text-center text-lg bg-amber-50/50 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 tracking-widest font-bold">
+                </div>
+
+                <div id="pin-error-msg" class="text-[11px] text-rose-500 font-medium hidden text-center">
+                    핀번호가 일치하지 않습니다. 다시 확인해주세요.
+                </div>
+
+                <div class="flex gap-2 justify-end pt-1">
+                    <button type="button" onclick="closeModal('pin-modal')" class="px-3.5 py-1.5 text-xs text-stone-600 hover:bg-stone-100 rounded-xl transition">
+                        취소
+                    </button>
+                    <button type="submit" class="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs rounded-xl font-medium transition">
+                        확인
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 3. Admin Authentication & Settings Modal -->
+    <div id="admin-modal" class="fixed inset-0 bg-amber-950/40 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-[#FFFDF9] border border-amber-200 rounded-3xl max-w-md w-full p-5 shadow-2xl relative">
+            <button onclick="closeModal('admin-modal')" class="absolute top-4 right-4 text-stone-400 hover:text-stone-600 w-8 h-8 rounded-full flex items-center justify-center transition">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+
+            <h3 class="text-lg font-bold text-amber-950 mb-0.5 flex items-center gap-2">
+                <i class="fa-solid fa-user-shield text-amber-600"></i> 방명록 관리자 모드
+            </h3>
+            <p class="text-[11px] text-amber-800/80 mb-3">방명록 제목 변경 및 전체 초기화 관리</p>
+
+            <div id="admin-auth-section" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-amber-900 mb-1">관리자 비밀번호</label>
+                    <input type="password" id="admin-password-input" placeholder="비밀번호 입력 (초기 비밀번호: 1234)"
+                        class="w-full px-3 py-2 bg-amber-50/50 border border-amber-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                </div>
+                <div id="admin-auth-error" class="text-xs text-rose-500 font-medium hidden">
+                    비밀번호가 올바르지 않습니다.
+                </div>
+                <button onclick="checkAdminPassword()" class="w-full py-2 bg-amber-500 hover:bg-amber-600 text-white font-medium text-xs sm:text-sm rounded-xl transition">
+                    로그인
+                </button>
+            </div>
+
+            <div id="admin-control-section" class="space-y-4 hidden">
+                <div class="p-2.5 bg-amber-50 rounded-xl border border-amber-200/60 text-xs text-amber-900">
+                    <i class="fa-solid fa-circle-check text-green-600 mr-1"></i> 관리자 권한으로 로그인되었습니다.
+                </div>
+
+                <div class="space-y-1.5 border-b border-amber-100 pb-3">
+                    <label class="block text-xs font-bold text-amber-900">방명록 제목 변경</label>
+                    <input type="text" id="admin-title-input" placeholder="새로운 제목을 입력하세요"
+                        class="w-full px-3 py-2 bg-amber-50/50 border border-amber-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                    <button onclick="savePaperTitle()" class="w-full py-1.5 bg-amber-800 hover:bg-amber-900 text-white font-medium text-xs rounded-xl transition">
+                        제목 수정 적용
+                    </button>
+                </div>
+
+                <div class="space-y-1.5 border-b border-amber-100 pb-3">
+                    <label class="block text-xs font-bold text-amber-900">관리자 비밀번호 변경</label>
+                    <input type="password" id="admin-new-pw-input" placeholder="새 관리자 비밀번호"
+                        class="w-full px-3 py-2 bg-amber-50/50 border border-amber-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                    <button onclick="changeAdminPassword()" class="w-full py-1.5 bg-stone-700 hover:bg-stone-800 text-white font-medium text-xs rounded-xl transition">
+                        비밀번호 변경
+                    </button>
+                </div>
+
+                <div class="pt-0.5">
+                    <label class="block text-xs font-bold text-rose-900 mb-1">데이터 관리</label>
+                    <button onclick="confirmResetAll()" class="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-trash-can"></i> 전체 방명록 초기화 (삭제)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Custom Confirm Dialog Modal -->
+    <div id="confirm-modal" class="fixed inset-0 bg-amber-950/40 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-[#FFFDF9] border border-amber-200 rounded-3xl max-w-sm w-full p-5 shadow-2xl text-center">
+            <div class="w-10 h-10 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-2.5 text-lg">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 id="confirm-modal-title" class="text-sm font-bold text-amber-950 mb-1">정말 삭제하시겠습니까?</h3>
+            <p id="confirm-modal-desc" class="text-xs text-amber-800/80 mb-4">이 작업은 취소할 수 없습니다.</p>
+
+            <div class="flex gap-2 justify-center">
+                <button onclick="closeModal('confirm-modal')" class="px-3.5 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-100 rounded-xl transition">
+                    취소
+                </button>
+                <button id="confirm-modal-action-btn" class="px-3.5 py-1.5 text-xs font-medium bg-rose-500 hover:bg-rose-600 text-white rounded-xl transition">
+                    삭제 확인
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 bg-amber-950 text-white text-xs px-4 py-2.5 rounded-xl shadow-xl z-50 flex items-center gap-2 transform translate-y-16 opacity-0 transition-all duration-300 pointer-events-none">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-amber-400"></i>
+        <span id="toast-message">메시지가 등록되었습니다.</span>
+    </div>
+
+    <!-- Firebase SDK Setup -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Configuration Handler
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'guestbook-paper-demo';
+        const firebaseConfig = typeof __firebase_config !== 'undefined'
+            ? JSON.parse(__firebase_config)
+            : {
+                apiKey: "AIzaSyDemoConfigForGuestbookKey",
+                authDomain: "guestbook-demo.firebaseapp.com",
+                projectId: "guestbook-demo",
+                storageBucket: "guestbook-demo.appspot.com",
+                messagingSenderId: "1234567890",
+                appId: "1:1234567890:web:abcdef123456"
+            };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // App state
+        let currentUser = null;
+        let messages = [];
+        let configData = {
+            title: "전학 가는 OOO을 위한 소중한 방명록 🌸",
+            adminPassword: "1234"
+        };
+        let isAdminAuthenticated = false;
+
+        // Firestore Paths
+        const messagesCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'messages');
+        const configDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'config', 'settings');
+
+        // Initialize Authentication & Listeners
+        async function initApp() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                currentUser = auth.currentUser;
+
+                subscribeConfig();
+                subscribeMessages();
+            } catch (err) {
+                console.warn("Auth/Firestore initialization error, using local fallback state:", err);
+                renderMessagesUI([]);
+            }
+        }
+
+        // Subscribe to Guestbook Configuration (Title, Admin Password)
+        function subscribeConfig() {
+            onSnapshot(configDocRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    configData = docSnap.data();
+                    updateTitleUI(configData.title);
+                } else {
+                    setDoc(configDocRef, configData);
+                }
+            }, (error) => {
+                console.error("Config subscription error:", error);
+            });
+        }
+
+        // Subscribe to Messages List
+        function subscribeMessages() {
+            onSnapshot(messagesCollectionRef, (querySnapshot) => {
+                const list = [];
+                querySnapshot.forEach((doc) => {
+                    list.push({ id: doc.id, ...doc.data() });
+                });
+
+                list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                messages = list;
+                renderMessagesUI(messages);
+            }, (error) => {
+                console.error("Messages subscription error:", error);
+            });
+        }
+
+        // Render Messages in Compact 5-Line Note Grid UI
+        function renderMessagesUI(data) {
+            const container = document.getElementById('notes-container');
+            document.getElementById('note-count').innerText = data.length;
+
+            if (data.length === 0) {
+                container.innerHTML = `
+                    <div class="col-span-full py-16 text-center text-amber-800/60 bg-white/40 rounded-2xl border border-dashed border-amber-200/80">
+                        <i class="fa-regular fa-face-smile-wink text-3xl mb-2 text-amber-400"></i>
+                        <p class="font-medium text-sm">아직 남겨진 방명록이 없어요!</p>
+                        <p class="text-xs text-amber-700/60 mt-0.5">첫 번째 마음을 방명록에 남겨보세요.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const styleClasses = {
+                yellow: {
+                    bg: 'bg-[#FEF08A]',
+                    border: 'border-amber-200/80',
+                    text: 'text-amber-950'
+                },
+                pink: {
+                    bg: 'bg-[#FECDD3]',
+                    border: 'border-rose-200/80',
+                    text: 'text-rose-950'
+                },
+                blue: {
+                    bg: 'bg-[#BAE6FD]',
+                    border: 'border-sky-200/80',
+                    text: 'text-sky-950'
+                }
+            };
+
+            const rotateClasses = ['note-rotate-1', 'note-rotate-2', 'note-rotate-3', 'note-rotate-4'];
+
+            container.innerHTML = data.map((item, idx) => {
+                const style = styleClasses[item.style] || styleClasses.yellow;
+                const rotate = rotateClasses[idx % rotateClasses.length];
+                const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleDateString('ko-KR', {
+                    month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                }) : '';
+
+                const cleanContent = escapeHtml((item.content || '').trim());
+
+                return `
+                    <div class="note-card ${style.bg} ${rotate} p-2.5 sm:p-3 rounded-xl shadow-xs border ${style.border} relative flex flex-col justify-between min-h-[145px]">
+                        <div class="absolute -top-2 left-1/2 -translate-x-1/2 w-12 h-3.5 masking-tape rounded-2xs"></div>
+
+                        <div class="w-full flex flex-col min-w-0">
+                            <div class="flex items-center justify-between border-b border-black/10 pb-1 mb-1 pt-0.5">
+                                <span class="font-bold text-xs ${style.text} flex items-center gap-1 truncate max-w-[95px]">
+                                    <i class="fa-solid fa-user-pen text-[9px] opacity-50"></i> ${escapeHtml(item.author)}
+                                </span>
+                                <span class="text-[8px] text-black/40 tracking-tighter shrink-0 ml-1">${dateStr}</span>
+                            </div>
+
+                            <div class="w-full overflow-hidden">
+                                <p class="font-handwriting text-sm sm:text-base ${style.text} whitespace-pre-wrap break-all text-left leading-snug line-clamp-6 m-0 p-0">${cleanContent}</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-1 pt-1 border-t border-black/5 flex items-center justify-end gap-1.5 no-pdf">
+                            <button onclick="promptPinVerification('${item.id}', 'edit')" title="수정" class="text-[10px] text-black/40 hover:text-black/80 px-1 py-0.5 transition">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button onclick="promptPinVerification('${item.id}', 'delete')" title="삭제" class="text-[10px] text-black/40 hover:text-rose-600 px-1 py-0.5 transition">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateTitleUI(titleText) {
+            if (titleText) {
+                document.getElementById('paper-title').innerText = titleText;
+            }
+        }
+
+        // Save / Update Message
+        window.handleFormSubmit = async function(e) {
+            e.preventDefault();
+            const noteId = document.getElementById('editing-note-id').value;
+            const author = document.getElementById('author-input').value.trim();
+            const content = document.getElementById('content-input').value.trim();
+            const style = document.querySelector('input[name="note-style"]:checked').value;
+            const pin = document.getElementById('pin-input').value.trim();
+
+            if (!author || !content || !pin) return;
+
+            const noteData = {
+                author: author,
+                content: content,
+                style: style,
+                pin: pin,
+                updatedAt: Date.now()
+            };
+
+            try {
+                if (noteId) {
+                    await updateDoc(doc(messagesCollectionRef, noteId), noteData);
+                    showToast("방명록 글이 수정되었습니다!");
+                } else {
+                    noteData.createdAt = Date.now();
+                    const newDocRef = doc(messagesCollectionRef);
+                    await setDoc(newDocRef, noteData);
+                    showToast("따뜻한 방명록 메시지가 등록되었습니다!");
+                }
+                closeModal('add-modal');
+                resetForm();
+            } catch (err) {
+                console.error("Save error:", err);
+                showToast("저장에 실패했습니다. 다시 시도해주세요.", true);
+            }
+        };
+
+        // PIN Verification for User Edit/Delete
+        window.promptPinVerification = function(id, action) {
+            document.getElementById('target-note-id').value = id;
+            document.getElementById('target-action').value = action;
+            document.getElementById('verify-pin-input').value = '';
+            document.getElementById('pin-error-msg').classList.add('hidden');
+            openModal('pin-modal');
+        };
+
+        window.verifyPinAndProceed = async function(e) {
+            e.preventDefault();
+            const id = document.getElementById('target-note-id').value;
+            const action = document.getElementById('target-action').value;
+            const inputPin = document.getElementById('verify-pin-input').value;
+
+            const targetNote = messages.find(m => m.id === id);
+            if (!targetNote) return;
+
+            if (targetNote.pin === inputPin || isAdminAuthenticated) {
+                closeModal('pin-modal');
+                if (action === 'delete') {
+                    showConfirmModal("방명록 삭제", "정말 이 글을 삭제하시겠습니까?", async () => {
+                        await deleteDoc(doc(messagesCollectionRef, id));
+                        showToast("방명록 글이 삭제되었습니다.");
+                    });
+                } else if (action === 'edit') {
+                    document.getElementById('editing-note-id').value = targetNote.id;
+                    document.getElementById('author-input').value = targetNote.author;
+                    document.getElementById('content-input').value = targetNote.content;
+                    document.getElementById('pin-input').value = targetNote.pin;
+
+                    const styleRadio = document.querySelector(`input[name="note-style"][value="${targetNote.style}"]`);
+                    if (styleRadio) styleRadio.checked = true;
+
+                    document.getElementById('modal-title').innerHTML = `<i class="fa-solid fa-pen-to-square text-amber-500"></i> 방명록 수정하기`;
+                    document.getElementById('save-btn').innerText = "수정 완료";
+                    openModal('add-modal');
+                }
+            } else {
+                document.getElementById('pin-error-msg').classList.remove('hidden');
+            }
+        };
+
+        // Admin Auth and Controls
+        window.openAdminAuthModal = function() {
+            if (isAdminAuthenticated) {
+                document.getElementById('admin-auth-section').classList.add('hidden');
+                document.getElementById('admin-control-section').classList.remove('hidden');
+                document.getElementById('admin-title-input').value = configData.title || '';
+            } else {
+                document.getElementById('admin-auth-section').classList.remove('hidden');
+                document.getElementById('admin-control-section').classList.add('hidden');
+                document.getElementById('admin-password-input').value = '';
+            }
+            openModal('admin-modal');
+        };
+
+        window.checkAdminPassword = function() {
+            const inputPw = document.getElementById('admin-password-input').value;
+            if (inputPw === (configData.adminPassword || "1234")) {
+                isAdminAuthenticated = true;
+                document.getElementById('admin-auth-error').classList.add('hidden');
+                document.getElementById('admin-auth-section').classList.add('hidden');
+                document.getElementById('admin-control-section').classList.remove('hidden');
+                document.getElementById('admin-title-input').value = configData.title || '';
+                showToast("관리자로 로그인되었습니다.");
+            } else {
+                document.getElementById('admin-auth-error').classList.remove('hidden');
+            }
+        };
+
+        window.savePaperTitle = async function() {
+            const newTitle = document.getElementById('admin-title-input').value.trim();
+            if (!newTitle) return;
+
+            try {
+                await updateDoc(configDocRef, { title: newTitle });
+                showToast("방명록 제목이 변경되었습니다.");
+                closeModal('admin-modal');
+            } catch (err) {
+                console.error("Title update error:", err);
+            }
+        };
+
+        window.changeAdminPassword = async function() {
+            const newPw = document.getElementById('admin-new-pw-input').value.trim();
+            if (!newPw) return;
+
+            try {
+                await updateDoc(configDocRef, { adminPassword: newPw });
+                configData.adminPassword = newPw;
+                document.getElementById('admin-new-pw-input').value = '';
+                showToast("관리자 비밀번호가 변경되었습니다.");
+            } catch (err) {
+                console.error("Password update error:", err);
+            }
+        };
+
+        window.confirmResetAll = function() {
+            showConfirmModal("전체 초기화", "모든 방명록 글을 삭제하시겠습니까? 이 작업은 복구할 수 없습니다.", async () => {
+                for (const m of messages) {
+                    await deleteDoc(doc(messagesCollectionRef, m.id));
+                }
+                showToast("모든 방명록 메시지가 초기화되었습니다.");
+                closeModal('admin-modal');
+            });
+        };
+
+        window.addEventListener('DOMContentLoaded', initApp);
+    </script>
+
+    <script>
+        // UI Helpers & General Logic
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+            if (id === 'add-modal') {
+                resetForm();
+            }
+        }
+
+        function resetForm() {
+            document.getElementById('editing-note-id').value = '';
+            document.getElementById('message-form').reset();
+            document.getElementById('modal-title').innerHTML = `<i class="fa-solid fa-book-open text-amber-500"></i> 방명록 남기기`;
+            document.getElementById('save-btn').innerText = "방명록 남기기";
+        }
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toast-message');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastMsg.innerText = message;
+            if (isError) {
+                toastIcon.className = "fa-solid fa-circle-exclamation text-rose-400";
+            } else {
+                toastIcon.className = "fa-solid fa-circle-check text-amber-400";
+            }
+
+            toast.classList.remove('translate-y-16', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-16', 'opacity-0');
+            }, 2500);
+        }
+
+        function showConfirmModal(title, desc, onConfirm) {
+            document.getElementById('confirm-modal-title').innerText = title;
+            document.getElementById('confirm-modal-desc').innerText = desc;
+            const btn = document.getElementById('confirm-modal-action-btn');
+
+            btn.onclick = async function() {
+                closeModal('confirm-modal');
+                if (onConfirm) await onConfirm();
+            };
+            openModal('confirm-modal');
+        }
+
+        function copyShareLink() {
+            const currentUrl = window.location.href;
+            try {
+                const tempInput = document.createElement('textarea');
+                tempInput.value = currentUrl;
+                tempInput.style.position = 'fixed';
+                tempInput.style.opacity = '0';
+                document.body.appendChild(tempInput);
+                tempInput.focus();
+                tempInput.select();
+                const successful = document.execCommand('copy');
+                document.body.removeChild(tempInput);
+
+                if (successful) {
+                    showToast("웹주소(URL)가 복사되었습니다! 친구들에게 공유해 보세요.");
+                } else {
+                    showToast("주소 복사에 실패했습니다. 주소창을 직접 복사해 주세요.", true);
+                }
+            } catch (err) {
+                console.error("Clipboard copy error:", err);
+                showToast("주소 복사에 실패했습니다. 주소창을 직접 복사해 주세요.", true);
+            }
+        }
+
+        function downloadPDF() {
+            const element = document.getElementById('capture-area');
+            const title = document.getElementById('paper-title').innerText || '추억방명록';
+
+            showToast("PDF 파일을 생성하고 있습니다. 잠시만 기다려주세요...");
+
+            element.classList.add('pdf-export-mode');
+
+            const opt = {
+                margin:       8,
+                filename:     `${title}_추억방명록.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, logging: false },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+            };
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                element.classList.remove('pdf-export-mode');
+                showToast("PDF 다운로드가 완료되었습니다!");
+            }).catch(err => {
+                element.classList.remove('pdf-export-mode');
+                console.error("PDF generation error:", err);
+                showToast("PDF 생성 중 오류가 발생했습니다.", true);
+            });
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
