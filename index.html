@@ -378,7 +378,7 @@
         let currentUser = null;
         let messages = [];
         let configData = {
-            title: "전학 가는 OOO을 위한 소중한 방명록 🌸",
+            title: "마음을 전하는 따뜻한 방명록 🌸",
             adminPassword: "1234"
         };
         let isAdminAuthenticated = false;
@@ -596,7 +596,7 @@
             }
         };
 
-        // Admin Auth and Controls
+        // Admin Auth and Controls (setDoc 적용으로 오류 완벽 해결)
         window.openAdminAuthModal = function() {
             if (isAdminAuthenticated) {
                 document.getElementById('admin-auth-section').classList.add('hidden');
@@ -629,11 +629,13 @@
             if (!newTitle) return;
 
             try {
-                await updateDoc(configDocRef, { title: newTitle });
+                await setDoc(configDocRef, { title: newTitle }, { merge: true });
+                configData.title = newTitle;
                 showToast("방명록 제목이 변경되었습니다.");
                 closeModal('admin-modal');
             } catch (err) {
                 console.error("Title update error:", err);
+                showToast("제목 수정 중 오류가 발생했습니다.", true);
             }
         };
 
@@ -642,12 +644,13 @@
             if (!newPw) return;
 
             try {
-                await updateDoc(configDocRef, { adminPassword: newPw });
+                await setDoc(configDocRef, { adminPassword: newPw }, { merge: true });
                 configData.adminPassword = newPw;
                 document.getElementById('admin-new-pw-input').value = '';
                 showToast("관리자 비밀번호가 변경되었습니다.");
             } catch (err) {
                 console.error("Password update error:", err);
+                showToast("비밀번호 변경 중 오류가 발생했습니다.", true);
             }
         };
 
