@@ -119,7 +119,7 @@
                 </div>
 
                 <h2 id="paper-title" class="text-2xl sm:text-4xl font-bold font-handwriting text-amber-950 tracking-wide my-1 leading-snug">
-                    마음을 전하는 따듯한 방명록 🌸
+                    마음을 전하는 따듯한 소중한 방명록 🌸
                 </h2>
                 <p id="paper-subtitle" class="text-xs sm:text-sm text-amber-800/80 font-gowun">
                     따뜻한 한마디를 남겨주세요!
@@ -133,10 +133,7 @@
 
             <!-- Notes Grid Container -->
             <div id="notes-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4 text-left max-w-6xl mx-auto">
-                <div class="col-span-full py-20 text-center text-amber-800/60">
-                    <i class="fa-solid fa-spinner fa-spin text-2xl mb-2 text-amber-500"></i>
-                    <p class="text-xs">방명록 메시지를 불러오는 중입니다...</p>
-                </div>
+                <!-- Loaded dynamically -->
             </div>
         </div>
     </main>
@@ -342,27 +339,9 @@
         <span id="toast-message">메시지가 등록되었습니다.</span>
     </div>
 
-    <!-- Firebase Firestore Setup (인증 없이 안전하게 실시간 공유) -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // ==========================================
-        // 1. 여기에 본인의 파이어베이스 설정을 붙여넣으세요!
-        // ==========================================
-        const firebaseConfig = {
-             apiKey: "AIzaSyA2Tejn7eTjBZa3f34BJ8HDMsmoQFQsMuY",
-             authDomain: "vguest-cbaca.firebaseapp.com",
-             projectId: "vguest-cbaca",
-             storageBucket: "vguest-cbaca.firebasestorage.app",
-             messagingSenderId: "165935199122",
-             appId: "1:165935199122:web:7c8923c2f833912cfb074b",
-             measurementId: "G-7SQ0TF19CS"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-
+    <!-- LocalStorage Standalone App Script -->
+    <script>
+        // App state
         let messages = [];
         let configData = {
             title: "마음을 전하는 따듯한 방명록 🌸",
@@ -370,33 +349,27 @@
         };
         let isAdminAuthenticated = false;
 
-        const messagesCollectionRef = collection(db, 'public_guestbook_messages');
-        const configDocRef = doc(db, 'public_guestbook_config', 'settings');
-
+        // Initialize Local Storage App
         function initApp() {
-            // 실시간 리스너로 모든 기기에서 데이터 공유 및 즉시 반영
-            onSnapshot(configDocRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    configData = docSnap.data();
-                    updateTitleUI(configData.title);
+            try {
+                const savedMessages = localStorage.getItem('guestbook_messages');
+                if (savedMessages) {
+                    messages = JSON.parse(savedMessages);
                 } else {
-                    setDoc(configDocRef, configData);
+                    messages = [];
                 }
-            }, (err) => {
-                console.error("Config load error:", err);
-            });
 
-            onSnapshot(messagesCollectionRef, (querySnapshot) => {
-                const list = [];
-                querySnapshot.forEach((d) => {
-                    list.push({ id: d.id, ...d.data() });
-                });
-                list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-                messages = list;
+                const savedConfig = localStorage.getItem('guestbook_config');
+                if (savedConfig) {
+                    configData = JSON.parse(savedConfig);
+                }
+
+                updateTitleUI(configData.title);
                 renderMessagesUI(messages);
-            }, (err) => {
-                console.error("Messages load error:", err);
-            });
+            } catch (err) {
+                console.error("Local storage load error:", err);
+                renderMessagesUI([]);
+            }
         }
 
         function renderMessagesUI(data) {
@@ -467,8 +440,8 @@
             }
         }
 
-        // Save / Update Message (Firestore Sync)
-        window.handleFormSubmit = async function(e) {
+        // Save / Update Message (LocalStorage)
+        window.handleFormSubmit = function(e) {
             e.preventDefault();
             const noteId = document.getElementById('editing-note-id').value;
             const author = document.getElementById('author-input').value.trim();
@@ -478,32 +451,33 @@
 
             if (!author || !content || !pin) return;
 
-            const noteData = {
-                author,
-                content,
-                style,
-                pin,
-                updatedAt: Date.now()
-            };
-
-            try {
-                if (noteId) {
-                    await updateDoc(doc(messagesCollectionRef, noteId), noteData);
-                    showToast("방명록 글이 수정되었습니다!");
-                } else {
-                    noteData.createdAt = Date.now();
-                    const newDocRef = doc(messagesCollectionRef);
-                    await setDoc(newDocRef, noteData);
-                    showToast("따뜻한 방명록 메시지가 등록되었습니다!");
+            if (noteId) {
+                const index = messages.findIndex(m => m.id === noteId);
+                if (index !== -1) {
+                    messages[index] = { ...messages[index], author, content, style, pin, updatedAt: Date.now() };
                 }
-
-                closeModal('add-modal');
-            } catch (err) {
-                console.error("Save error:", err);
-                showToast("저장에 실패했습니다. 다시 시도해주세요.", true);
+                showToast("방명록 글이 수정되었습니다!");
+            } else {
+                const newNote = {
+                    id: 'note_' + Date.now(),
+                    author,
+                    content,
+                    style,
+                    pin,
+                    createdAt: Date.now()
+                };
+                messages.unshift(newNote);
+                showToast("따뜻한 방명록 메시지가 등록되었습니다!");
             }
+
+            localStorage.setItem('guestbook_messages', JSON.stringify(messages));
+            renderMessagesUI(messages);
+            
+            // 팝업 닫기 및 폼 초기화 즉시 실행
+            closeModal('add-modal');
         };
 
+        // PIN Verification for User Edit/Delete
         window.promptPinVerification = function(id, action) {
             document.getElementById('target-note-id').value = id;
             document.getElementById('target-action').value = action;
@@ -512,7 +486,7 @@
             openModal('pin-modal');
         };
 
-        window.verifyPinAndProceed = async function(e) {
+        window.verifyPinAndProceed = function(e) {
             e.preventDefault();
             const id = document.getElementById('target-note-id').value;
             const action = document.getElementById('target-action').value;
@@ -524,8 +498,10 @@
             if (targetNote.pin === inputPin || isAdminAuthenticated) {
                 closeModal('pin-modal');
                 if (action === 'delete') {
-                    showConfirmModal("방명록 삭제", "정말 이 글을 삭제하시겠습니까?", async () => {
-                        await deleteDoc(doc(messagesCollectionRef, id));
+                    showConfirmModal("방명록 삭제", "정말 이 글을 삭제하시겠습니까?", () => {
+                        messages = messages.filter(m => m.id !== id);
+                        localStorage.setItem('guestbook_messages', JSON.stringify(messages));
+                        renderMessagesUI(messages);
                         showToast("방명록 글이 삭제되었습니다.");
                     });
                 } else if (action === 'edit') {
@@ -546,6 +522,7 @@
             }
         };
 
+        // Admin Auth and Controls
         window.openAdminAuthModal = function() {
             if (isAdminAuthenticated) {
                 document.getElementById('admin-auth-section').classList.add('hidden');
@@ -573,21 +550,18 @@
             }
         };
 
-        window.savePaperTitle = async function() {
+        window.savePaperTitle = function() {
             const newTitle = document.getElementById('admin-title-input').value.trim();
             if (!newTitle) return;
 
-            try {
-                await setDoc(configDocRef, { title: newTitle }, { merge: true });
-                showToast("방명록 제목이 변경되었습니다.");
-                closeModal('admin-modal');
-            } catch (err) {
-                console.error("Title update error:", err);
-                showToast("제목 수정 중 오류가 발생했습니다.", true);
-            }
+            configData.title = newTitle;
+            localStorage.setItem('guestbook_config', JSON.stringify(configData));
+            updateTitleUI(newTitle);
+            showToast("방명록 제목이 변경되었습니다.");
+            closeModal('admin-modal');
         };
 
-        window.changeAdminPassword = async function() {
+        window.changeAdminPassword = function() {
             const inputElement = document.getElementById('admin-new-pw-input');
             const newPw = inputElement ? inputElement.value.trim() : '';
             
@@ -596,22 +570,18 @@
                 return;
             }
 
-            try {
-                await setDoc(configDocRef, { adminPassword: newPw }, { merge: true });
-                if (inputElement) inputElement.value = '';
-                showToast("관리자 비밀번호가 변경되었습니다.");
-                closeModal('admin-modal');
-            } catch (err) {
-                console.error("Password update error:", err);
-                showToast("비밀번호 변경 중 오류가 발생했습니다.", true);
-            }
+            configData.adminPassword = newPw;
+            localStorage.setItem('guestbook_config', JSON.stringify(configData));
+            if (inputElement) inputElement.value = '';
+            showToast("관리자 비밀번호가 변경되었습니다.");
+            closeModal('admin-modal');
         };
 
         window.confirmResetAll = function() {
-            showConfirmModal("전체 초기화", "모든 방명록 글을 삭제하시겠습니까?", async () => {
-                for (const m of messages) {
-                    await deleteDoc(doc(messagesCollectionRef, m.id));
-                }
+            showConfirmModal("전체 초기화", "모든 방명록 글을 삭제하시겠습니까?", () => {
+                messages = [];
+                localStorage.removeItem('guestbook_messages');
+                renderMessagesUI(messages);
                 showToast("모든 방명록 메시지가 초기화되었습니다.");
                 closeModal('admin-modal');
             });
@@ -662,9 +632,9 @@
             document.getElementById('confirm-modal-desc').innerText = desc;
             const btn = document.getElementById('confirm-modal-action-btn');
 
-            btn.onclick = async function() {
+            btn.onclick = function() {
                 closeModal('confirm-modal');
-                if (onConfirm) await onConfirm();
+                if (onConfirm) onConfirm();
             };
             openModal('confirm-modal');
         }
