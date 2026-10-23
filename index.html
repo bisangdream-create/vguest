@@ -126,7 +126,7 @@
 
                 <!-- Main Guestbook Title -->
                 <h2 id="paper-title" class="text-2xl sm:text-4xl font-bold font-handwriting text-amber-950 tracking-wide my-1 leading-snug">
-                    마음을 전하는 따듯한 방명록 🌸
+                    전학 가는 OOO을 위한 소중한 방명록 🌸
                 </h2>
                 <p id="paper-subtitle" class="text-xs sm:text-sm text-amber-800/80 font-gowun">
                     따뜻한 한마디를 남겨주세요!
@@ -281,7 +281,7 @@
             <div id="admin-auth-section" class="space-y-3">
                 <div>
                     <label class="block text-xs font-bold text-amber-900 mb-1">관리자 비밀번호</label>
-                    <input type="password" id="admin-password-input" placeholder="비밀번호 입력"
+                    <input type="password" id="admin-password-input" placeholder="비밀번호 입력 (초기 비밀번호: 1234)"
                         class="w-full px-3 py-2 bg-amber-50/50 border border-amber-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
                 </div>
                 <div id="admin-auth-error" class="text-xs text-rose-500 font-medium hidden">
@@ -361,14 +361,14 @@
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'guestbook-paper-demo';
         const firebaseConfig = typeof __firebase_config !== 'undefined'
             ? JSON.parse(__firebase_config)
-          : {
-                apiKey: "AIzaSyA2Tejn7eTjBZa3f34BJ8HDMsmoQFQsMuY",
-                authDomain: "vguest-cbaca.firebaseapp.com",
-                projectId: "vguest-cbaca",
-                storageBucket: "vguest-cbaca.firebasestorage.app",
-                messagingSenderId: "165935199122",
-                appId: "1:165935199122:web:7c8923c2f833912cfb074b",
-                };
+             : {
+                apiKey: "AIzaSyA2Tejn7eTjBZa3f34BJ8HDMsmoQFQsMuY",
+                authDomain: "vguest-cbaca.firebaseapp.com",
+                projectId: "vguest-cbaca",
+                storageBucket: "vguest-cbaca.firebasestorage.app",
+                messagingSenderId: "165935199122",
+                appId: "1:165935199122:web:7c8923c2f833912cfb074b",
+                };
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -378,7 +378,7 @@
         let currentUser = null;
         let messages = [];
         let configData = {
-            title: "마음을 전하는 따듯한 방명록 🌸",
+            title: "전학 가는 OOO을 위한 소중한 방명록 🌸",
             adminPassword: "1234"
         };
         let isAdminAuthenticated = false;
@@ -516,7 +516,7 @@
             }
         }
 
-        // Save / Update Message
+        // Save / Update Message (팝업 닫기 명시적 추가 완료)
         window.handleFormSubmit = async function(e) {
             e.preventDefault();
             const noteId = document.getElementById('editing-note-id').value;
@@ -545,8 +545,11 @@
                     await setDoc(newDocRef, noteData);
                     showToast("따뜻한 방명록 메시지가 등록되었습니다!");
                 }
+                
+                // 등록/수정 성공 직후 팝업 닫기 및 폼 초기화 수행
                 closeModal('add-modal');
                 resetForm();
+
             } catch (err) {
                 console.error("Save error:", err);
                 showToast("저장에 실패했습니다. 다시 시도해주세요.", true);
@@ -596,7 +599,7 @@
             }
         };
 
-        // Admin Auth and Controls (setDoc 적용으로 오류 완벽 해결)
+        // Admin Auth and Controls
         window.openAdminAuthModal = function() {
             if (isAdminAuthenticated) {
                 document.getElementById('admin-auth-section').classList.add('hidden');
@@ -640,14 +643,20 @@
         };
 
         window.changeAdminPassword = async function() {
-            const newPw = document.getElementById('admin-new-pw-input').value.trim();
-            if (!newPw) return;
+            const inputElement = document.getElementById('admin-new-pw-input');
+            const newPw = inputElement ? inputElement.value.trim() : '';
+            
+            if (!newPw) {
+                showToast("새 비밀번호를 입력해주세요.", true);
+                return;
+            }
 
             try {
                 await setDoc(configDocRef, { adminPassword: newPw }, { merge: true });
                 configData.adminPassword = newPw;
-                document.getElementById('admin-new-pw-input').value = '';
+                if (inputElement) inputElement.value = '';
                 showToast("관리자 비밀번호가 변경되었습니다.");
+                closeModal('admin-modal');
             } catch (err) {
                 console.error("Password update error:", err);
                 showToast("비밀번호 변경 중 오류가 발생했습니다.", true);
